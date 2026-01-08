@@ -39,8 +39,6 @@ Most to least compatible:
 
 Forked from: [python-wfs-server](https://gitlab.com/labiang/python-wfs-server)
 
-Note: the documentation/ dir is from the forked repo and may be innacurate to this project.
-
 ## Development Plan
 
 This is a WIP project. However, the main branch is, and should continue be functional.
