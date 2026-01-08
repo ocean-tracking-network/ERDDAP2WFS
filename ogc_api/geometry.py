@@ -10,49 +10,46 @@ DBL_EPSILON = sys.float_info.epsilon
 
 def compute_bounds(geometry: geojson.geometry.Geometry):
     feature = s2sphere.LatLngRect()
+    ret = feature
 
     if geometry is None:
-        return feature
+        ret = feature
 
-    if isinstance(geometry, geojson.geometry.Point):
+    elif isinstance(geometry, geojson.geometry.Point):
         if len(geometry['coordinates']) >= 2:
             feature = feature.from_point(s2sphere.LatLng.from_degrees(geometry['coordinates'][1],
                                                                       geometry['coordinates'][0]))
-        return feature
 
-    if isinstance(geometry, geojson.geometry.MultiPoint):
+    elif isinstance(geometry, geojson.geometry.MultiPoint):
         for point in geometry['coordinates']:
             if len(point) >= 2:
                 feature = feature.from_point(s2sphere.LatLng.from_degrees(point[1], point[0]))
-        return feature
 
-    if isinstance(geometry, geojson.geometry.LineString):
-        return compute_line_bounds(geometry['coordinates'])
+    elif isinstance(geometry, geojson.geometry.LineString):
+        ret = compute_line_bounds(geometry['coordinates'])
 
-    if isinstance(geometry, geojson.geometry.MultiLineString):
+    elif isinstance(geometry, geojson.geometry.MultiLineString):
         for line in geometry['coordinates']:
             feature = feature.union((compute_line_bounds(line)))
-        return feature
 
-    if isinstance(geometry, geojson.geometry.Polygon):
+    elif isinstance(geometry, geojson.geometry.Polygon):
         for ring in geometry['coordinates']:
             feature = feature.union(compute_line_bounds(ring))
 
-        return expand_for_sub_regions(feature)
+        ret = expand_for_sub_regions(feature)
 
-    if isinstance(geometry, geojson.geometry.MultiPolygon):
+    elif isinstance(geometry, geojson.geometry.MultiPolygon):
         for poly in geometry['coordinates']:
             for ring in poly:
                 feature = feature.union(compute_line_bounds(ring))
 
-        return expand_for_sub_regions(feature)
+        ret = expand_for_sub_regions(feature)
 
-    if isinstance(geometry, geojson.geometry.GeometryCollection):
+    elif isinstance(geometry, geojson.geometry.GeometryCollection):
         for geometry_object in geometry['Geometries']:
             feature = feature.union(compute_bounds(geometry_object))
-        return feature
 
-    return feature
+    return ret
 
 
 def compute_line_bounds(line):

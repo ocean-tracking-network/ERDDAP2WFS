@@ -9,8 +9,9 @@ import s2sphere
 from Geometry import Point
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from ogc_api import tiles, geometry
+from ogc_api import geometry
 from ogc_api.data_structures import Collection, CollectionMetadata, WFSLink, APIResponse, HTTP_RESPONSES
+from erddap_proxy.erddap_matadata import ERDDAPMetadata, ERDDAPData, ERDDAPCollections
 
 
 class Footer:
@@ -22,11 +23,11 @@ class Footer:
 
 
 class Index:
-    collections: {}
+    collections: ERDDAPCollections
     public_path: str
 
     def __init__(self):
-        self.collections = {}
+        self.erddap_collections = ERDDAPCollections(os.environ.get("ERDDAP", "https://erddap.oceantrack.org/erddap/"))
 
     def get_collection_metadata(self, path: str):
         for coll in self.collections:
@@ -35,22 +36,23 @@ class Index:
 
         return None
 
-    def replace_collection(self, coll: Collection):
-        old = self.collections.get(coll.metadata.name)
+    # def replace_collection(self, coll: Collection):
+    #     old = self.collections.get(coll.metadata.name)
 
-        if old is not None:
-            self.collections[coll.metadata.name] = coll
+    #     if old is not None:
+    #         self.collections[coll.metadata.name] = coll
 
     def get_collections(self):
         collections = []
 
-        for collection in self.collections.values():
+        for collection in self.erddap_collections.get_collections():
             collections.append(collection.metadata)
-
         return collections
 
     def get_collection(self, collection_name: str):
-        collection = self.collections.get(collection_name)
+        # collection = self.collections.get(collection_name)
+        collection = self.erddap_collections.get_collection_as_meta(collection_name)
+        
         if collection is None:
             return APIResponse(None, HTTP_RESPONSES["NOT_FOUND"])
 
@@ -59,10 +61,12 @@ class Index:
     def get_items(self,
                   collection: str, start_id: str, start_index: int, limit: int,
                   bbox: s2sphere.LatLngRect, include_links: bool, writer: io.BytesIO):
-        if collection not in self.collections:
+        if collection not in self.erddap_collections.meta.get_erddap_datasets():
             return APIResponse(None, HTTP_RESPONSES["NOT_FOUND"])
 
-        coll = self.collections[collection]
+        # coll = self.collections[collection]
+        coll = self.erddap_collections.get_collection_as_data(collection)
+        # return APIResponse({}, None)
 
         bounds = s2sphere.LatLngRect()
         num_features = 0
@@ -150,60 +154,28 @@ class Index:
 
         return APIResponse(feature, None)
 
-    def get_tile(self, collection: str, zoom: int, x: int, y: int):
-        if x < 0 or y < 0 or not 0 < zoom < 30:
-            return APIResponse(None, HTTP_RESPONSES["NOT_FOUND"])
+    # def reload_if_changed(self, collection_metadata: CollectionMetadata):
+    #     response = read_collection(collection_metadata.name, collection_metadata.path,
+    #                                collection_metadata.last_modified)
+    #     if response.http_response is not None and response.http_response is HTTP_RESPONSES["NOT_MODIFIED"]:
+    #         return None
 
-        if collection not in self.collections:
-            return APIResponse(None, HTTP_RESPONSES["NOT_FOUND"])
+    #     self.replace_collection(response.content)
 
-        coll = self.collections.get(collection)
-
-        scale = 1 << zoom
-
-        tile_bounds = geometry.get_tile_bounds(zoom, x, y)
-        tile_origin = Point(x=(float(x) * 256.0 / float(scale)), y=(float(y) * 256.0 / float(scale)))
-        tile = tiles.Tile()
-
-        for index, feature_bounds in enumerate(coll.bbox):
-            if not tile_bounds.intersects(feature_bounds):
-                continue
-
-            point = coll.web_mercator[index].__sub__(tile_origin).__mul__(float(scale))
-            tile.draw_point(point)
-
-        png = tile.to_png()
-
-        return APIResponse(png, None)
-
-    def reload_if_changed(self, collection_metadata: CollectionMetadata):
-        response = read_collection(collection_metadata.name, collection_metadata.path,
-                                   collection_metadata.last_modified)
-        if response.http_response is not None and response.http_response is HTTP_RESPONSES["NOT_MODIFIED"]:
-            return None
-
-        self.replace_collection(response.content)
-
-    def watch_files(self):
-        for collection in self.get_collections():
-            self.reload_if_changed(collection)
+    # def watch_files(self):
+    #     for collection in self.get_collections():
+    #         self.reload_if_changed(collection)
 
 
 def make_index(collections: dict, public_path: str):
     index = Index()
     index.public_path = public_path
 
-    scheduler = BackgroundScheduler()
-
-    scheduler.add_job(index.watch_files, 'interval', minutes=30)
-    scheduler.start()
-
-    for name, path in collections.items():
-        response = read_collection(name, path, datetime.min)
-        index.collections[name] = response.content
+    # for name, path in collections.items():
+    #     response = read_collection(name, path, datetime.min)
+    #     index.collections[name] = response.content
 
     return index
-
 
 def read_collection(name, path, if_modified_since):
     abs_path = os.path.abspath(path)
@@ -218,14 +190,17 @@ def read_collection(name, path, if_modified_since):
 
     with open(abs_path, "rb") as file:
         feature_collection = geojson.load(file)
-
+        
     collection = Collection()
 
     collection.metadata = CollectionMetadata(name, path, mod_time)
 
+    i = 0
     for index, feature in enumerate(feature_collection.features):
-        collection.id.append(feature.id)
-        collection.by_id[feature.id] = index
+        # collection.id.append(feature.id)
+        collection.id.append("N"+str(i))
+        collection.by_id["N"+str(i)] = index
+        i+=1
         collection.feature.append(geojson.dumps(feature, ensure_ascii=False, separators=(',', ':')))
 
         collection.bbox.append(geometry.compute_bounds(feature.geometry))

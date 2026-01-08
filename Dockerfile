@@ -1,8 +1,6 @@
-FROM tiangolo/uvicorn-gunicorn:python3.7-alpine3.8
+FROM python:3.13-alpine
 WORKDIR /app/wfs
 COPY requirements.txt /app/wfs/
-RUN apk add build-base python-dev py-pip jpeg-dev zlib-dev
-ENV LIBRARY_PATH=/lib:/usr/lib
 RUN pip install -r requirements.txt
 COPY . /app/wfs
 EXPOSE 8000

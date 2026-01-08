@@ -21,7 +21,6 @@ PORT_ENV = os.environ.get('PORT')
 LOCAL_WEB_URL = "http://127.0.0.1"
 DOCKER_WEB_URL = "http://0.0.0.0"
 
-CASTLES_PATH = os.path.join(".", "osm-castles-CH.geojson")
 WEB_HOST_URL = str.format('{0}:{1}/', DOCKER_WEB_URL if PORT_ENV else LOCAL_WEB_URL, PORT_ENV if PORT_ENV else '8000')
 
 SHORT_INDEX_MESSAGE = 'This is a mini OGC API server compliant with the ' \
@@ -61,8 +60,6 @@ def main():
                                      'lakes=path/to/l.geojson"')
 
             collections[value[0]] = value[1]
-    else:
-        collections['castles'] = CASTLES_PATH
 
     idx = make_index(collections, WEB_HOST_URL)
     server = make_web_server(idx)
@@ -131,32 +128,6 @@ def main():
 
     # endregion
 
-    # region Tile endpoints
-    @app.get("/tiles/{collection}/{zoom}/{x}/{y}.png")
-    def get_raster_tile(collection: str, zoom: int, x: int, y: int):
-        api_response = server.handle_tile_request(collection, zoom, x, y)
-
-        if api_response.http_response is not None:
-            return Response(content=None, status_code=api_response.http_response.status_code)
-
-        return Response(content=api_response.content,
-                        headers={
-                            "content-type": "image/png",
-                            "content-length": str(len(api_response.content))
-                        })
-
-    @app.get("/tiles/{collection}/{zoom}/{x}/{y}/{a}/{b}.geojson")
-    def get_tile_feature_info(collection: str, zoom: int, x: int, y: int, a: int, b: int):
-        api_response = server.handle_tile_feature_info_request(collection, zoom, x, y, a, b)
-
-        if api_response.http_response is not None:
-            return Response(content=None, status_code=api_response.http_response.status_code)
-
-        return Response(content=api_response.content,
-                        headers={
-                            "content-type": "application/geo+json",
-                            "content-length": str(len(api_response.content))
-                        })
 
     @app.get("/api")
     def api_definition():

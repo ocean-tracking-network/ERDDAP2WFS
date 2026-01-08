@@ -5,7 +5,6 @@ import s2sphere
 
 from ogc_api import index, geometry
 from ogc_api.data_structures import WFSLink, APIResponse, HTTP_RESPONSES
-from ogc_api.tiles import TileKey
 
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 1000
@@ -97,6 +96,11 @@ class WebServer:
             title: str
             links: [] = []
 
+            def __init__(self):
+                self.links = []
+                self.title = ""
+                self.id = ""
+
             def to_json(self):
                 return dict(id=self.id, title=self.title, links=self.links)
 
@@ -127,6 +131,8 @@ class WebServer:
             wfs_collection.id = collection.name
             wfs_collection.title = "A collection of " + collection.name + " features"
 
+            # print(link.to_json())
+            # print(items_link.to_json())
             wfs_collection.links.append(link.to_json())
             wfs_collection.links.append(items_link.to_json())
 
@@ -177,47 +183,8 @@ class WebServer:
 
         return api_response
 
-    def handle_tile_request(self, collection: str, zoom: int, x: int, y: int):
-        api_response = self.index.get_tile(collection, zoom, x, y)
-        return api_response
-
     def handle_item_request(self, collection: str, feature_id: str):
         api_response = self.index.get_item(collection, feature_id)
-        api_response.content = json_dumps_for_response(api_response.content)
-
-        return api_response
-
-    def handle_tile_feature_info_request(self, collection: str,
-                                         zoom: int, x: int, y: int,
-                                         a: int, b: int):
-        tile = TileKey(x, y, zoom)
-
-        if a < 0 or a > 256 or b < 0 or b >= 256:
-            return APIResponse(None, HTTP_RESPONSES["BAD_REQUEST"])
-
-        tile_bounds = tile.bounds()
-        tile_size = tile_bounds.get_size()
-
-        pixel_size = s2sphere.LatLng(lat=tile_size.lat().radians / 256,
-                                     lng=tile_size.lng().radians / 256)
-
-        center = s2sphere.LatLng(
-            lat=s2sphere.Angle(tile_bounds.hi().lat().radians
-                               - pixel_size.lat().radians * float(b)).radians,
-            lng=s2sphere.Angle(tile_bounds.lo().lng().radians
-                               + pixel_size.lng().radians * float(a)).radians)
-
-        bbox_size = s2sphere.LatLng(lat=s2sphere.Angle(pixel_size.lat().radians
-                                                       * MAX_SIGNATURE_WIDTH).radians,
-                                    lng=s2sphere.Angle(pixel_size.lng().radians
-                                                       * MAX_SIGNATURE_WIDTH).radians)
-
-        bbox = s2sphere.LatLngRect.from_center_size(center, bbox_size)
-
-        features = io.BytesIO()
-        include_links = False
-
-        api_response = self.index.get_items(collection, "", 0, 10, bbox, include_links, features)
         api_response.content = json_dumps_for_response(api_response.content)
 
         return api_response
